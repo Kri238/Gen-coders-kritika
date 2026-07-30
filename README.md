@@ -84,7 +84,7 @@ Label Lab is an educational ingredient-screening tool and does not provide medic
 
 ---
 
-## 📸 Screenshots
+##  Screenshots
 
 Add screenshots of:
 
