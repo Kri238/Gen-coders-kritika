@@ -78,12 +78,6 @@ The grading system adapts recommendations based on the user's profile.
 
 ---
 
-##  Disclaimer
-
-Label Lab is an educational ingredient-screening tool and does not provide medical advice. Always consult healthcare professionals for dietary and health-related decisions.
-
----
-
 ##  Screenshots
 
 Add screenshots of:
@@ -103,6 +97,11 @@ Contributions, feature suggestions, and bug reports are welcome.
 2. Create a feature branch
 3. Commit your changes
 4. Submit a Pull Request
+
+---
+##  Disclaimer
+
+Label Lab is an educational ingredient-screening tool and does not provide medical advice. Always consult healthcare professionals for dietary and health-related decisions.
 
 ---
 
