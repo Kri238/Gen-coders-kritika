@@ -1,5 +1,8 @@
 # Gen-coders
 ScanBite  is a web-based food label analyzer that uses OCR to scan ingredient lists, detect allergens and additives, assess health risks, and generate personalized food grades based on user health profiles.
+
+# Deployed Link - 
+https://scanbite-gencoders.netlify.app/
 #  Scan bite
 
 **Scan bite** is a web-based food label analyzer that helps users understand what's inside packaged foods. Using OCR (Optical Character Recognition), the application scans ingredient labels, identifies potentially harmful additives, allergens, preservatives, and ultra-processed ingredients, then generates a personalized health grade based on the user's profile.
