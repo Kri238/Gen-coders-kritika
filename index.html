@@ -67,13 +67,8 @@
     background:radial-gradient(circle, var(--accent-bg) 0%, transparent 65%);
     opacity:0.7;pointer-events:none;
   }
-  .brand{display:flex;align-items:center;justify-content:space-between;position:relative;}
-  .brand h1{
-    font-family:var(--mono);font-size:22px;letter-spacing:1px;margin:0;font-weight:700;
-    background:linear-gradient(90deg, var(--ink) 0%, var(--safe) 120%);
-    -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  }
-  .brand h1 span{color:var(--safe);-webkit-text-fill-color:var(--safe);}
+  .brand{display:flex;align-items:center;justify-content:center;position:relative;}
+  .brand-logo{height:70px;max-width:100%;object-fit:contain;display:block;}
   .brand .tag{
     font-family:var(--mono);font-size:9.5px;color:var(--safe);letter-spacing:1.2px;text-transform:uppercase;
     background:var(--safe-bg);padding:4px 10px;border-radius:20px;border:1px solid var(--safe);
@@ -673,8 +668,7 @@
 
   <header class="top">
     <div class="brand">
-      <h1>SCAN<span>·</span>BITE</h1>
-      <div class="tag">Inspection Kit</div>
+      <img src="logo.jpeg" alt="ScanBite – Know Your Bite" class="brand-logo">
     </div>
     <div class="sub">Scan a food label. Get it graded. Cross-checked against you.</div>
   </header>
