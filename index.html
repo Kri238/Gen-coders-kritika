@@ -9,8 +9,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Label Lab">
-<title>Label Lab — Ingredient Inspection</title>
+<meta name="apple-mobile-web-app-title" content="ScanBite">
+<title>ScanBite — Ingredient Inspection</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -340,9 +340,22 @@
   .gauge-word.safe{color:var(--safe);background:var(--safe-bg);}
   .gauge-word.caution{color:var(--caution);background:var(--caution-bg);}
   .gauge-word.danger{color:var(--danger);background:var(--danger-bg);}
-  .gauge-sub{font-size:12px;color:var(--ink-soft);margin-top:12px;text-align:center;line-height:1.5;}
+  .gauge-sub{font-size:12px;color:var(--ink-soft);margin-top:6px;text-align:center;line-height:1.5;}
   .gauge-sub b{color:var(--ink);}
   .gauge-date{font-family:var(--mono);font-size:9.5px;color:var(--ink-soft);margin-top:4px;letter-spacing:0.3px;}
+
+  .gauge-name-row{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:12px;max-width:100%;}
+  .gauge-name-row b{font-family:var(--mono);font-weight:700;font-size:14.5px;color:var(--ink);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:78%;}
+  .rename-btn, .hist-rename{
+    flex-shrink:0;width:22px;height:22px;border-radius:50%;border:1px solid var(--rule);
+    background:var(--card);color:var(--ink-soft);font-size:11px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;transition:background .16s ease,color .16s ease;
+  }
+  .rename-btn:hover, .hist-rename:hover{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+
+  .gib-raw{font-family:var(--mono);font-size:10px;color:var(--ink-soft);opacity:0.75;margin-top:6px;
+    line-height:1.5;font-style:italic;word-break:break-word;}
 
   /* ── PLAIN-LANGUAGE BREAKDOWN LIST ── */
   .plain-list{display:flex;flex-direction:column;}
@@ -641,7 +654,8 @@
     border:1.5px solid var(--ink);border-radius:var(--radius);background:var(--card);
     padding:16px 12px;display:flex;flex-direction:column;align-items:center;box-shadow:var(--shadow-card);
   }
-  .compare-name{font-family:var(--mono);font-weight:700;font-size:12px;text-align:center;margin-bottom:6px;line-height:1.35;min-height:32px;}
+  .compare-name{font-family:var(--mono);font-weight:700;font-size:12px;text-align:center;line-height:1.35;}
+  .compare-name-row{display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:6px;min-height:32px;}
   .compare-cats{width:100%;margin-top:10px;display:flex;flex-direction:column;gap:6px;}
   .ccat{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink-soft);border-bottom:1px dashed var(--rule);padding-bottom:4px;}
   .ccat b{color:var(--ink);font-family:var(--mono);}
@@ -659,7 +673,7 @@
 
   <header class="top">
     <div class="brand">
-      <h1>LABEL<span>·</span>LAB</h1>
+      <h1>SCAN<span>·</span>BITE</h1>
       <div class="tag">Inspection Kit</div>
     </div>
     <div class="sub">Scan a food label. Get it graded. Cross-checked against you.</div>
@@ -721,8 +735,6 @@
         <label class="field-label">Extracted text — fix any OCR typos before analyzing</label>
         <textarea id="ocrText" placeholder="Ingredients: ..."></textarea>
 
-        <label class="field-label">Product name (optional — auto-generated from ingredients if left blank)</label>
-        <input class="text-input" id="productName" placeholder="e.g. Choco Wafers 150g">
         <div class="btn-row">
           <button class="action" id="btnAnalyze">Analyze Ingredients</button>
         </div>
@@ -1244,15 +1256,46 @@ function matchIngredient(token){
   return {matchedName:null, raw:token.trim(), entry:null};
 }
 
+// Corrects a single stray 0/1 sandwiched inside an otherwise-alphabetic word — the classic
+// OCR letter/digit mixup (e.g. "0p" -> "op", "GR0UNDNUT" -> "GROUNDNUT"). Deliberately narrow:
+// it only touches words with exactly one digit character, so real numbers, percentages, and
+// multi-digit E/INS codes (e.g. "E101") are never touched.
+function fixDigitLetterConfusion(str){
+  return str.replace(/\S+/g, (word) => {
+    const digits = (word.match(/[0-9]/g)||[]).length;
+    const letters = (word.match(/[a-zA-Z]/g)||[]).length;
+    if(digits===1 && letters>=2){
+      return word.replace(/0/g,"o").replace(/1/g,"l");
+    }
+    return word;
+  });
+}
+
+// Flags a token as "not worth showing as its own ingredient card" — most of its words are too
+// short or vowel-less to be real words, meaning it's near-certainly stray OCR noise rather than
+// legible label text. These still count toward the unclassified/purity total, they're just
+// grouped into a single summary row instead of cluttering the list with fake identifications.
+function isGibberishToken(raw){
+  const words = raw.split(/\s+/).map(w=>w.replace(/[^a-zA-Z]/g,"")).filter(Boolean);
+  if(!words.length) return false;
+  let junk = 0;
+  words.forEach(w=>{
+    const hasVowel = /[aeiouAEIOU]/.test(w);
+    if(w.length<=3 || (w.length<=5 && !hasVowel)) junk++;
+  });
+  return (junk/words.length) >= 0.5;
+}
+
 function parseIngredients(text){
-  const cleaned = text
+  let cleaned = text
     .replace(/ingredients\s*[:\-]/i,"")
-    .replace(/[\[\]{}|~_#\\]/g," ")
+    .replace(/[\[\]{}|~_#\\§¢€£¥†‡•·^¤±ªº*]/g," ")
     .replace(/[""''`]/g,"")
     .replace(/[()]/g," , ")
     .replace(/\d+(\.\d+)?\s*%/g,"")
     .replace(/\n/g," ")
     .replace(/\s+/g," ");
+  cleaned = fixDigitLetterConfusion(cleaned);
   const rawTokens = cleaned.split(/[,;]/).map(s=>s.trim()).filter(s=>s.length>1);
   const seen = new Set();
   const out = [];
@@ -2117,14 +2160,13 @@ document.getElementById("btnAnalyze").addEventListener("click", async ()=>{
   const report = computeReport(ingredients);
   const profile = await storeGet("profile");
   const flags = healthFlags(ingredients, profile);
-  const typedName = document.getElementById("productName").value.trim();
-  const productName = typedName || guessProductName(ingredients);
-
-  renderReport(document.getElementById("resultsMount"), {productName, ingredients, report, flags, rawText:text});
+  const productName = guessProductName(ingredients);
 
   const scanRecord = {timestamp:Date.now(), productName, rawText:text, ingredients, report, flags};
   await storeSet("scan:"+scanRecord.timestamp, scanRecord);
-  setStatus("Report saved to History.");
+
+  renderReport(document.getElementById("resultsMount"), {productName, ingredients, report, flags, rawText:text, ts:scanRecord.timestamp});
+  setStatus("Report saved to History. Tap the name to rename it.");
   showNewFact();
   btnAnalyze.disabled = false;
 });
@@ -2240,7 +2282,7 @@ function ingRow(ing){
   </div>`;
 }
 
-function renderReport(mount, {productName, ingredients, report, flags, rawText}){
+function renderReport(mount, {productName, ingredients, report, flags, rawText, ts}){
   const verdict = buildVerdict(report, ingredients);
   const allergenBanner = report.allergens.length
     ? `<div class="banner caution">⚠ Declared allergens: ${report.allergens.join(", ")}</div>` : "";
@@ -2253,12 +2295,29 @@ function renderReport(mount, {productName, ingredients, report, flags, rawText})
 
   const flagsHtml = flags.length ? `<div class="flags">${flags.map(f=>`<div class="flag"><div class="dot" style="background:${f.level==='danger'?'var(--danger)':'var(--caution)'}"></div><div>${f.text}</div></div>`).join("")}</div>` : "";
 
+  // Fragments too garbled to mean anything get grouped into a single summary row
+  // instead of each being rendered as its own faux-ingredient card.
+  const gibberishItems = ingredients.filter(i=>i.gibberish);
+  const normalItems = ingredients.filter(i=>!i.gibberish);
+  const gibberishRow = gibberishItems.length ? `<div class="ing-row gibberish-row">
+      <div class="stamp N" style="width:36px;height:36px;transform:none;animation:none;"><div class="g">N</div></div>
+      <div class="info">
+        <div class="iname">${gibberishItems.length} unreadable fragment${gibberishItems.length>1?"s":""}</div>
+        <div class="inote">Too garbled to identify — usually stray OCR noise rather than real ingredient text. Retake with a tighter crop around just the text for a cleaner read.</div>
+        <div class="gib-raw">${gibberishItems.map(g=>g.raw).join(" · ")}</div>
+      </div>
+    </div>` : "";
+
   mount.innerHTML = `
     <h2 class="section-title" style="margin-top:26px;">02 · Inspection Report</h2>
     <div class="report" id="reportCard">
       <div class="score-gauge">
         ${buildGauge(report.overallScore)}
-        <div class="gauge-sub"><b>${productName}</b> · ${report.total} ingredients read${report.unclassifiedCount ? ` · ${report.unclassifiedCount} unclassified` : ""}</div>
+        <div class="gauge-name-row">
+          <b id="reportProductName">${productName}</b>
+          ${ts ? `<button class="rename-btn" id="btnRenameProduct" title="Rename product">✎</button>` : ""}
+        </div>
+        <div class="gauge-sub">${report.total} ingredients read${report.unclassifiedCount ? ` · ${report.unclassifiedCount} unclassified` : ""}</div>
         <div class="gauge-date">${new Date().toLocaleString()}</div>
       </div>
       <div class="report-actions">
@@ -2277,20 +2336,39 @@ function renderReport(mount, {productName, ingredients, report, flags, rawText})
       ${flagsHtml}
       <h2 class="section-title" style="margin:16px 18px 0;">Ingredient Breakdown</h2>
       <div class="ing-list">
-        ${ingredients.map(ingRow).join("")}
+        ${normalItems.map(ingRow).join("")}
+        ${gibberishRow}
       </div>
     </div>
   `;
 
-  mount.querySelector("#btnCopySummary").addEventListener("click", ()=>copySummary(productName, report, flags));
-  mount.querySelector("#btnSaveImage").addEventListener("click", ()=>saveReportImage(mount.querySelector("#reportCard"), productName));
+  if(ts){
+    const btnRename = mount.querySelector("#btnRenameProduct");
+    if(btnRename){
+      btnRename.addEventListener("click", async ()=>{
+        const nameEl = mount.querySelector("#reportProductName");
+        const current = nameEl.textContent;
+        const input = prompt("Rename this product:", current);
+        if(input===null) return;
+        const trimmed = input.trim();
+        if(!trimmed || trimmed===current) return;
+        const rec = await storeGet("scan:"+ts);
+        if(rec){ rec.productName = trimmed; await storeSet("scan:"+ts, rec); }
+        nameEl.textContent = trimmed;
+        setStatus(`Renamed to "${trimmed}".`);
+      });
+    }
+  }
+
+  mount.querySelector("#btnCopySummary").addEventListener("click", ()=>copySummary(mount.querySelector("#reportProductName").textContent, report, flags));
+  mount.querySelector("#btnSaveImage").addEventListener("click", ()=>saveReportImage(mount.querySelector("#reportCard"), mount.querySelector("#reportProductName").textContent));
 }
 
 /* ============================== SHARE / EXPORT ============================== */
 async function copySummary(productName, report, flags){
   const c = report.categories;
   const lines = [
-    `${productName} — Label Lab Report`,
+    `${productName} — ScanBite Report`,
     `Overall: ${report.overallScore}/100 (${scoreWord(report.overallScore)})`,
     "",
     `Carcinogenic Risk: ${c.carcinogenic.score}/100 — ${CAT_PHRASES.carcinogenic[c.carcinogenic.grade]}`,
@@ -2302,7 +2380,7 @@ async function copySummary(productName, report, flags){
     lines.push("", "Flags for your profile:");
     flags.forEach(f=>lines.push(`- ${f.text.replace(/<[^>]+>/g,"")}`));
   }
-  lines.push("", `Scanned via Label Lab · ${new Date().toLocaleDateString()}`);
+  lines.push("", `Scanned via ScanBite · ${new Date().toLocaleDateString()}`);
   const text = lines.join("\n");
   try{
     await navigator.clipboard.writeText(text);
@@ -2768,11 +2846,26 @@ async function renderHistory(){
       <input type="checkbox" class="hist-check" data-ts="${r.timestamp}" ${compareSelection.has(String(r.timestamp))?"checked":""}>
       <div class="stamp ${r.report.overallGrade}"><div class="g">${r.report.overallGrade}</div></div>
       <div class="htxt">
-        <div class="hname">${r.productName}</div>
+        <div class="hname">${r.productName} <button class="hist-rename" data-ts="${r.timestamp}" title="Rename">✎</button></div>
         <div class="hdate">${new Date(r.timestamp).toLocaleString()} · score ${r.report.overallScore}</div>
       </div>
     </div>
   `).join("");
+  mount.querySelectorAll(".hist-rename").forEach(btn=>{
+    btn.addEventListener("click", async (e)=>{
+      e.stopPropagation();
+      const ts = btn.dataset.ts;
+      const rec = await storeGet("scan:"+ts);
+      if(!rec) return;
+      const input = prompt("Rename this product:", rec.productName);
+      if(input===null) return;
+      const trimmed = input.trim();
+      if(!trimmed || trimmed===rec.productName) return;
+      rec.productName = trimmed;
+      await storeSet("scan:"+ts, rec);
+      renderHistory();
+    });
+  });
   mount.querySelectorAll(".hist-check").forEach(cb=>{
     cb.addEventListener("click", e=>e.stopPropagation());
     cb.addEventListener("change", ()=>{
@@ -2783,13 +2876,13 @@ async function renderHistory(){
   });
   mount.querySelectorAll(".hist-item").forEach(el=>{
     el.addEventListener("click", async (e)=>{
-      if(e.target.classList.contains("hist-check")) return;
+      if(e.target.classList.contains("hist-check") || e.target.classList.contains("hist-rename")) return;
       const rec = await storeGet("scan:"+el.dataset.ts);
       if(!rec) return;
       // switch to scan tab and show this report
       document.querySelector('nav.tabs button[data-view="scan"]').click();
       document.getElementById("resultsMount").innerHTML="";
-      renderReport(document.getElementById("resultsMount"), {productName:rec.productName, ingredients:rec.ingredients, report:rec.report, flags:rec.flags, rawText:rec.rawText});
+      renderReport(document.getElementById("resultsMount"), {productName:rec.productName, ingredients:rec.ingredients, report:rec.report, flags:rec.flags, rawText:rec.rawText, ts:rec.timestamp});
       document.getElementById("resultsMount").scrollIntoView({behavior:"smooth"});
     });
   });
@@ -2842,7 +2935,10 @@ function renderCompare(records){
           : `<div class="cf-empty">Nothing significant flagged</div>`;
         return `
         <div class="compare-col">
-          <div class="compare-name">${r.productName}</div>
+          <div class="compare-name-row">
+            <div class="compare-name">${r.productName}</div>
+            <button class="hist-rename" data-ts="${r.timestamp}" title="Rename">✎</button>
+          </div>
           ${buildGauge(r.report.overallScore)}
           <div class="compare-cats">
             <div class="ccat"><span>Carcinogenic</span><b>${r.report.categories.carcinogenic.score}</b></div>
@@ -2862,6 +2958,20 @@ function renderCompare(records){
   document.getElementById("btnCompareBack").addEventListener("click", ()=>{
     mount.style.display = "none";
     document.getElementById("historyListWrap").style.display = "block";
+  });
+  mount.querySelectorAll(".hist-rename").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const ts = btn.dataset.ts;
+      const rec = records.find(r=>String(r.timestamp)===String(ts));
+      if(!rec) return;
+      const input = prompt("Rename this product:", rec.productName);
+      if(input===null) return;
+      const trimmed = input.trim();
+      if(!trimmed || trimmed===rec.productName) return;
+      rec.productName = trimmed;
+      await storeSet("scan:"+ts, rec);
+      renderCompare(records);
+    });
   });
 }
 
