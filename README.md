@@ -17,6 +17,7 @@ ScanBite  is a web-based food label analyzer that uses OCR to scan ingredient li
 * Scan history tracking
 * Educational food facts and ingredient insights
 *  Optional AI-assisted ingredient recognition
+* Personal diet plan based on bmi and health records
 
 ---
 
@@ -60,6 +61,7 @@ Users can create a profile containing:
 * High Cholesterol
 * Pregnancy
 * ADHD Sensitivity
+* gout
 * And more
 
 The grading system adapts recommendations based on the user's profile.
